@@ -155,10 +155,6 @@ _NCrunch_*
 .*crunch*.local.xml
 nCrunchTemp_*
 
-# MightyMoose
-*.mm.*
-AutoTest.Net/
-
 # Web workbench (sass)
 .sass-cache/
 
