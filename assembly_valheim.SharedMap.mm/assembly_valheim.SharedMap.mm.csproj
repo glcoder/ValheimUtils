@@ -9,6 +9,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="assembly_utils">
+      <HintPath>..\ValheimAssembly\assembly_utils.dll</HintPath>
+    </Reference>
     <Reference Include="assembly_valheim">
       <HintPath>..\ValheimAssembly\assembly_valheim.dll</HintPath>
     </Reference>
