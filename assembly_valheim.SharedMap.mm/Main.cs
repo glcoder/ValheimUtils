@@ -2,6 +2,7 @@
 using UnityEngine;
 
 #pragma warning disable CS0626
+#pragma warning disable CS0649
 
 class patch_Game : Game
 {
@@ -14,7 +15,6 @@ class patch_Game : Game
 
         ZRoutedRpc.instance.Register("ValheimUtils_MapDataRequest", RPC_ValheimUtils_MapDataRequest);
         ZRoutedRpc.instance.Register<long>("ValheimUtils_MapDataSend", RPC_ValheimUtils_MapDataSend);
-        ZRoutedRpc.instance.Register<ZPackage>("ValheimUtils_MapDataResponse", ((patch_Minimap) Minimap.instance).RPC_ValheimUtils_MapDataResponse);
     }
 
     private void RPC_ValheimUtils_MapDataRequest(long sender)
@@ -40,8 +40,6 @@ class patch_Game : Game
             new ZPackage(GetPlayerProfile().GetMapData())
         );
     }
-
-    
 }
 
 class patch_Player : Player
@@ -62,29 +60,41 @@ class patch_Player : Player
 
 class patch_Minimap : Minimap
 {
-    private Texture2D m_fogTexture;
-    private bool[] m_explored;
+    // expose Minimap private fields
+    [MonoModIgnore] private Texture2D m_fogTexture;
+    [MonoModIgnore] private bool[] m_explored;
 
-    private extern void orig_Explore(int x, int y);
+    // expose Minimap private methods
+    [MonoModIgnore]
+    private extern bool Explore(int x, int y);
 
-    private void Explore(int x, int y)
+    // patch Minimap methods
+    private extern void orig_Start();
+
+    private void Start()
     {
-        orig_Explore(x, y);
+        orig_Start();
+        Debug.Log($"{nameof(Minimap)}: Start");
+
+        ZRoutedRpc.instance.Register<ZPackage>("ValheimUtils_MapDataResponse", RPC_ValheimUtils_MapDataResponse);
     }
 
-    public void RPC_ValheimUtils_MapDataResponse(long sender, ZPackage zpackage)
+    // new Minimap methods
+    public void RPC_ValheimUtils_MapDataResponse(long sender, ZPackage mapData)
     {
-        int num1 = zpackage.ReadInt();
-        int num2 = zpackage.ReadInt();
+        Debug.Log($"{nameof(Minimap)}: RPC_ValheimUtils_MapDataResponse Sender={sender} MapDataSize={mapData.Size()}");
 
-        for (int index = 0; index < this.m_explored.Length; ++index)
+        int mapVersion = mapData.ReadInt();
+        int mapSize = mapData.ReadInt();
+
+        for (int index = 0; index < m_explored.Length; ++index)
         {
-            if (zpackage.ReadBool())
+            if (mapData.ReadBool())
             {
-                Explore(index % num2, index / num2);
+                Explore(index % mapSize, index / mapSize);
             }
         }
-        this.m_fogTexture.Apply();
-        Debug.Log($"{nameof(Game)}: RPC_ValheimUtils_MapDataResponse Sender={sender} MapDataSize={num2}");
+
+        m_fogTexture.Apply();
     }
 }
