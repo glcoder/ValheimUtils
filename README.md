@@ -9,6 +9,7 @@ ValheimUtils uses [MonoMod](https://github.com/MonoMod/MonoMod) as a mod framwew
 * [Mods](#mods)
 * [Prerequsites](#prerequsites)
 * [Installation](#installation)
+* [Building](#building)
 
 ## Mods
 
@@ -47,3 +48,9 @@ Planned features:
 * For Linux you can use same assemblies but you need BePinEx for Linux, which you can download manually [from here](https://github.com/BepInEx/BepInEx/releases).
 
 Just unpack archive content over Valheim installation and you ready to go. You can always undo installation by removing `winhttp.dll` and restoring Valheim files. Probably it will be needed to repeat mod installation process after each Valheim update.
+
+## Building
+
+* Clone this repo.
+* Copy `assembly_valheim.dll` and `assembly_utils.dll` from game installation directory to `ValheimAssembly`.
+* Use either `dotnet build` or Microsoft Studio 2019 CE to build solution.
