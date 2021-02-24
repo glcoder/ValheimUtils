@@ -1,48 +1,77 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using MonoMod;
 using UnityEngine;
 
 #pragma warning disable CS0626
 #pragma warning disable CS0649
 
-class patch_Player : Player
+class patch_ZNet : ZNet
 {
-    private bool m_enterGame = true;
+    [MonoModIgnore] private bool m_publicReferencePosition;
 
-    public extern void orig_OnSpawned();
+    private extern void orig_Awake();
 
-    public new void OnSpawned()
+    private void Awake()
     {
-        Debug.Log($"{nameof(Player)}: OnSpawned PlayerName={GetPlayerName()}");
-        orig_OnSpawned();
+        Debug.Log($"{nameof(ZNet)}: Awake");
+        orig_Awake();
 
-        if (m_enterGame)
+        m_publicReferencePosition = true;
+    }
+
+    [MonoModReplace]
+    public new void SetPublicReferencePosition(bool pub)
+    {
+    }
+}
+
+class patch_Game : Game
+{
+    [MonoModIgnore] private bool m_firstSpawn;
+
+    private extern Player orig_SpawnPlayer(Vector3 spawnPoint);
+
+    private Player SpawnPlayer(Vector3 spawnPoint)
+    {
+        Debug.Log($"{nameof(Game)}: SpawnPlayer FirstSpawn={m_firstSpawn} SpawnPoint={spawnPoint}");
+        var player = orig_SpawnPlayer(spawnPoint);
+
+        if (!ZNet.instance.IsServer() && m_firstSpawn)
         {
-            foreach (var mapScanline in ((patch_Minimap) Minimap.instance).SharedMap_GetMapScanlines())
-            {
-                ZRoutedRpc.instance.InvokeRoutedRPC("SharedMap_Update", mapScanline);
-            }
-
-            m_enterGame = false;
+            ((patch_Minimap) Minimap.instance).SharedMap_Update();
         }
+
+        return player;
     }
 }
 
 class patch_Minimap : Minimap
 {
-    // expose Minimap fields
     [MonoModIgnore] private Texture2D m_fogTexture;
     [MonoModIgnore] private bool[] m_explored;
+
+    private List<ZNet.PlayerInfo> m_SharedMap_playersInfo;
+    private float m_SharedMap_exploreTimer;
 
     [MonoModIgnore]
     private extern bool Explore(int x, int y);
 
+    [MonoModIgnore]
+    private extern void Explore(Vector3 p, float radius);
+
     private extern void orig_Start();
+    private extern void orig_Update();
 
     private void Start()
     {
         Debug.Log($"{nameof(Minimap)}: Start IsServer={ZNet.instance.IsServer()}");
         orig_Start();
+
+        m_SharedMap_playersInfo = new List<ZNet.PlayerInfo>();
+        m_SharedMap_exploreTimer = 0.0f;
 
         if (ZNet.instance.IsServer())
         {
@@ -54,68 +83,114 @@ class patch_Minimap : Minimap
         }
     }
 
-    public IEnumerable<ZPackage> SharedMap_GetMapScanlines()
+    private void Update()
     {
-        for (int y = 0; y < m_textureSize; ++y)
+        orig_Update();
+
+        m_SharedMap_exploreTimer += Time.deltaTime;
+        if (m_SharedMap_exploreTimer <= m_exploreInterval)
+            return;
+
+        m_SharedMap_exploreTimer = 0.0f;
+
+        m_SharedMap_playersInfo.Clear();
+        ZNet.instance.GetOtherPublicPlayers(m_SharedMap_playersInfo);
+
+        foreach (var playerInfo in m_SharedMap_playersInfo)
         {
-            var scanline = new ZPackage();
-
-            scanline.Write(m_textureSize);
-            scanline.Write(y);
-
-            for (int x = 0; x < m_textureSize; ++x)
-            {
-                scanline.Write(m_explored[y * m_textureSize + x]);
-            }
-
-            yield return scanline;
+            Explore(playerInfo.m_position, m_exploreRadius);
         }
     }
 
-    private void RPC_SharedMap_Update(long sender, ZPackage mapScanline)
+    public void SharedMap_Update()
     {
-        Debug.Log($"{nameof(Minimap)}: RPC_SharedMap_Update Sender={sender} MapScanlineSize={mapScanline.Size()}");
-
-
-        int mapSize = mapScanline.ReadInt();
-        if (m_textureSize != mapSize)
-            return;
-
-        var y = mapScanline.ReadInt();
-
-        var tempScanline = new ZPackage();
-        tempScanline.Write(mapSize);
-        tempScanline.Write(y);
-
-        for (int x = 0; x < m_textureSize; ++x)
-        {
-            if (mapScanline.ReadBool())
-            {
-                Debug.Log($"{nameof(Minimap)}: SharedMap Explore({x}, {y})");
-                m_explored[y * m_textureSize + x] = true;
-            }
-
-            tempScanline.Write(m_explored[y * m_textureSize + x]);
-        }
-
-        ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, "SharedMap_Apply", tempScanline);
+        var mapData = SharedMap_CompressMap(m_explored);
+        ZRoutedRpc.instance.InvokeRoutedRPC("SharedMap_Update", mapData);
     }
 
-    private void RPC_SharedMap_Apply(long sender, ZPackage mapScanline)
+    private ZPackage SharedMap_CompressMap(bool[] explored)
     {
-        Debug.Log($"{nameof(Minimap)}: RPC_SharedMap_Apply Sender={sender} MapScanlineSize={mapScanline.Size()}");
-
-        int mapSize = mapScanline.ReadInt();
-        if (m_textureSize != mapSize)
-            return;
-
-        var y = mapScanline.ReadInt();
-        for (int x = 0; x < m_textureSize; ++x)
+        using (var memoryStream = new MemoryStream())
         {
-            if (mapScanline.ReadBool())
+            var bits = new BitArray(explored);
+            var buffer = new byte[explored.Length / 8 + (explored.Length % 8 == 0 ? 0 : 1)];
+            bits.CopyTo(buffer, 0);
+
+            using (var stream = new DeflateStream(memoryStream, CompressionMode.Compress))
             {
-                Debug.Log($"Explore({x}, {y})");
-                Explore(x, y);
+                stream.Write(buffer, 0, buffer.Length);
+                stream.Close();
+
+                var mapData = new ZPackage();
+                mapData.Write(explored.Length);
+                mapData.Write(memoryStream.ToArray());
+
+                return mapData;
+            }
+        }
+    }
+
+    private bool[] SharedMap_DecompressMap(ZPackage compressedMapData)
+    {
+        var exploredLength = compressedMapData.ReadInt();
+        using (var memoryStream = new MemoryStream(compressedMapData.ReadByteArray()))
+        {
+            var buffer = new byte[exploredLength / 8 + (exploredLength % 8 == 0 ? 0 : 1)];
+
+            using (var stream = new DeflateStream(memoryStream, CompressionMode.Decompress))
+            {
+                stream.Read(buffer, 0, buffer.Length);
+                stream.Close();
+
+                var bits = new BitArray(buffer);
+                var explored = new bool[exploredLength];
+                bits.CopyTo(explored, 0);
+
+                return explored;
+            }
+        }
+    }
+
+    private void RPC_SharedMap_Update(long sender, ZPackage mapData)
+    {
+        Debug.Log($"{nameof(Minimap)}: RPC_SharedMap_Update Sender={sender} MapDataSize={mapData.Size()}");
+
+        var explored = SharedMap_DecompressMap(mapData);
+        if (explored.Length != m_explored.Length)
+        {
+            Debug.LogError($"{nameof(Minimap)}: RPC_SharedMap_Update invalid map data");
+            return;
+        }
+
+        for (var index = 0; index < explored.Length; ++index)
+        {
+            // server side m_fogTexture can be ignored
+            m_explored[index] = m_explored[index] || explored[index];
+        }
+
+        ZRoutedRpc.instance.InvokeRoutedRPC(
+            ZRoutedRpc.Everybody,
+            "SharedMap_Apply",
+            SharedMap_CompressMap(m_explored)
+        );
+    }
+
+    private void RPC_SharedMap_Apply(long sender, ZPackage mapData)
+    {
+        Debug.Log($"{nameof(Minimap)}: RPC_SharedMap_Apply Sender={sender} MapDataSize={mapData.Size()}");
+
+        var explored = SharedMap_DecompressMap(mapData);
+        if (explored.Length != m_explored.Length)
+        {
+            Debug.LogError($"{nameof(Minimap)}: RPC_SharedMap_Apply invalid map data");
+            return;
+        }
+
+        for (var index = 0; index < explored.Length; ++index)
+        {
+            if (explored[index])
+            {
+                Explore(index % m_textureSize, index / m_textureSize);
             }
         }
 
