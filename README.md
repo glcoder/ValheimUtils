@@ -38,7 +38,7 @@ Planned features:
 
 * [Valheim](https://www.valheimgame.com/) of course :)
 * [BiPinEx](https://github.com/BepInEx/BepInEx)
-* [BepInEx.MelonLoader.Loader](https://github.com/BepInEx/BepInEx.MelonLoader.Loader)
+* [BepInEx.MonoMod.Loader](https://github.com/BepInEx/BepInEx.MonoMod.Loader)
 * Some Mono asemblies from [Unity 2019.4.20f1](https://unity3d.com/unity/qa/lts-releases?version=2019.4)
 
 ## Installation
