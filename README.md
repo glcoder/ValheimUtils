@@ -7,7 +7,7 @@ ValheimUtils uses [MonoMod](https://github.com/MonoMod/MonoMod) as a mod framwew
 ## Sections
 
 * [Mods](#mods)
-* [Prerequsites](#prerequsites)
+* [Prerequisites](#prerequisites)
 * [Installation](#installation)
 * [Building](#building)
 
@@ -35,7 +35,7 @@ Let you start public server without password. You probably want to add some Stea
 Planned features:
 * Ask password only for not whitelisted users.
 
-## Prerequsites
+## Prerequisites
 
 * [Valheim](https://www.valheimgame.com/) of course :)
 * [BiPinEx](https://github.com/BepInEx/BepInEx)
