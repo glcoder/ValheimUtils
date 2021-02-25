@@ -23,7 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\assembly_valheim.Config.mm\assembly_valheim.Config.mm.csproj" />
+    <ProjectReference Include="..\assembly_valheim.Config.mm\assembly_valheim.Config.mm.csproj">
+      <Private>false</Private>
+      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

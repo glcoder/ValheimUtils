@@ -16,6 +16,9 @@ namespace ValheimConfig
         // ExtendedStorage
         public static ConfigEntry<bool> ExtendedStorageEnabled;
 
+        // NoPassword
+        public static ConfigEntry<bool> NoPasswordEnabled;
+
         private extern void orig_ctor(World world);
 
         [MonoModConstructor]
@@ -25,6 +28,10 @@ namespace ValheimConfig
 
             ExtendedStorageEnabled = Config.Bind("ExtendedStorage", "Enabled", false,
                 "Enable ExtendedStorage mod."
+            );
+
+            NoPasswordEnabled = Config.Bind("NoPassword", "Enabled", true,
+                "Enable NoPassword mod."
             );
 
             orig_ctor(world);
