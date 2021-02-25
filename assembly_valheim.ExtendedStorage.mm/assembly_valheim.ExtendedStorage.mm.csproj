@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net45</TargetFramework>
@@ -20,6 +20,10 @@
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>..\Dependencies\Unity\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\assembly_valheim.Config.mm\assembly_valheim.Config.mm.csproj" />
   </ItemGroup>
 
 </Project>
